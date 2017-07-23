@@ -22,7 +22,7 @@ stringListToMultiline strings =
 indent :: Int -> String -> String
 indent amount original =
     let
-        indentStr = List.replicate 4 '.'
+        indentStr = List.replicate 4 ' '
     in
         (List.concat $ List.replicate amount indentStr) ++ original
 
@@ -40,6 +40,54 @@ data Msg  = Msg {msgName :: String, msgParams :: [String]}
 msgToString :: Msg -> String
 msgToString Msg {msgName=name, msgParams=params} =
     name ++ " " ++ (List.intercalate " " params)
+
+
+{-
+  Stores an elm record. Each member stores (name, type, default value)
+-}
+
+data Record = Record {recordName :: String, recordMembers :: [(String, String, String)]}
+
+{-
+  Creates a string representation of an elm record
+-}
+
+recordToStrings :: Record -> [String]
+recordToStrings Record {recordName=name, recordMembers=members} =
+    let
+        memberStrings =
+            case members of
+              [] ->
+                ["{}"]
+              _ ->
+                  ( List.map
+                    (\(separator, (name, typeName, _)) -> separator ++ name ++ ": " ++ typeName)
+                    $ List.zip (["{ "] ++ (List.repeat ", ")) members
+                  )
+                  ++ [indent 1 "}"]
+
+    in
+        [ "type alias " ++ name ]
+        ++ ( List.map (indent 1) memberStrings )
+
+
+{-
+  Creates an init function for a record
+-}
+
+recordInitFunction :: String -> Record -> [String]
+recordInitFunction name (Record {recordName=recordName, recordMembers = members}) =
+    let
+        typeSignature = name ++ " : " ++ recordName
+        declaration = "name ="
+    in
+        [ recordName
+          ++ " "
+          ++ ( List.concat
+                $ List.intersperse " "
+                $ List.map (\(_, _, defaultValue) -> defaultValue) members
+             )
+        ]
 
 
 {-
@@ -189,36 +237,36 @@ isValidType name =
     -- TODO Actually validate this
     True
 
-inputName :: IO (Maybe String)
-inputName = do
-    putStrLn "Name of msg? (empty for none)"
+inputTypeName :: String -> IO (Maybe String)
+inputTypeName typeName = do
+    putStrLn ("Type of " ++ typeName ++ "? (empty for none)")
     name <- getLine
-    if name == [] then
+    if name == "" then
         return Nothing
     else if isValidType name then
         return (Just name)
     else
-        inputName
+        inputTypeName typeName
+
 
 inputTypeList :: IO [String]
 inputTypeList =
     let
         inner :: [String] -> IO [String]
         inner other = do
-            putStrLn "Name of type? (empty to finnish type list)"
-            name <- getLine
-            if name == [] then
+            name <- inputTypeName "type"
+            case name of
+              Nothing ->
                 return other
-            else if isValidType name then
+              Just name ->
                 inner $ other ++ [name]
-            else
-                inner other
     in do
         inner []
 
+
 inputMsg :: IO (Maybe Msg)
 inputMsg = do
-    name <- inputName
+    name <- inputTypeName "Msg"
     case name of
       Just name -> do
         types <- inputTypeList
@@ -241,19 +289,62 @@ inputMsgs =
         inner []
 
 
+inputRecordField :: IO (Maybe (String, String, String))
+inputRecordField =
+    do
+        putStrLn "Name of field (empty for no field)"
+        name <- getLine
+        if name == "" then
+            return Nothing
+        else do
+            typeName <- inputFieldType name
+            putStrLn $ "Default value of " ++ name
+            value <- getLine
+            return $ Just (name, typeName, value)
+    where
+        inputFieldType :: String -> IO String
+        inputFieldType fieldName =
+            do
+                fieldType <- inputTypeName fieldName
+                case fieldType of
+                  Just name ->
+                    return name
+                  Nothing ->
+                      inputFieldType fieldName
+
+
+inputModel :: IO (Record)
+inputModel =
+    do
+        fields <- inner []
+        return $ Record "model" fields
+    where
+        inner :: [(String, String, String)] -> IO [(String, String, String)]
+        inner acc =
+            do
+                field <- inputRecordField
+                case field of
+                    Just field ->
+                        inner (acc ++ [field])
+                    Nothing ->
+                        return acc
+
+
 
 
 someFunc :: IO ()
 someFunc =
     let
-        fullCodeBuilder msgs =
+        fullCodeBuilder msgs model =
             [ buildImportStatements []
+            , addHeaderComment "Model" $ recordToStrings model
             , addHeaderComment "Messages" $ msgStringsFromMsgs msgs
             , addHeaderComment "Update" $ buildUpdateFunction msgs
             , addHeaderComment "View" $ buildViewFunction
             ]
     in do
         msgs <- inputMsgs
-        putStrLn $ stringListToMultiline $ interCodeWhitespace $ fullCodeBuilder msgs
+        model <- inputModel
+        putStrLn $ stringListToMultiline $ interCodeWhitespace $ fullCodeBuilder msgs model
 
 
