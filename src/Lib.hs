@@ -184,18 +184,76 @@ interCodeWhitespace blocks =
             $ List.repeat ""
 
 
+isValidType :: String -> Bool
+isValidType name =
+    -- TODO Actually validate this
+    True
+
+inputName :: IO (Maybe String)
+inputName = do
+    putStrLn "Name of msg? (empty for none)"
+    name <- getLine
+    if name == [] then
+        return Nothing
+    else if isValidType name then
+        return (Just name)
+    else
+        inputName
+
+inputTypeList :: IO [String]
+inputTypeList =
+    let
+        inner :: [String] -> IO [String]
+        inner other = do
+            putStrLn "Name of type? (empty to finnish type list)"
+            name <- getLine
+            if name == [] then
+                return other
+            else if isValidType name then
+                inner $ other ++ [name]
+            else
+                inner other
+    in do
+        inner []
+
+inputMsg :: IO (Maybe Msg)
+inputMsg = do
+    name <- inputName
+    case name of
+      Just name -> do
+        types <- inputTypeList
+        return $ Just $ Msg name types
+      Nothing ->
+        return Nothing
+
+
+inputMsgs :: IO [Msg]
+inputMsgs =
+    let
+        inner other = do
+            msg <- inputMsg
+            case msg of
+              Just msg ->
+                inner $ other ++ [msg]
+              Nothing ->
+                return other
+    in
+        inner []
+
+
+
 
 someFunc :: IO ()
 someFunc =
     let
-        msgs = [Msg "Test1" [], Msg "Test2" ["Int"]]
-        blocks =
+        fullCodeBuilder msgs =
             [ buildImportStatements []
             , addHeaderComment "Messages" $ msgStringsFromMsgs msgs
             , addHeaderComment "Update" $ buildUpdateFunction msgs
             , addHeaderComment "View" $ buildViewFunction
             ]
     in do
-        putStrLn $ stringListToMultiline $ interCodeWhitespace blocks
+        msgs <- inputMsgs
+        putStrLn $ stringListToMultiline $ interCodeWhitespace $ fullCodeBuilder msgs
 
 
