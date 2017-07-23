@@ -3,8 +3,9 @@ module Lib
     , interCodeWhitespace
     ) where
 
-import Data.List as List
-import Data.Char as Char
+import qualified Data.List as List
+import qualified Data.Char as Char
+import qualified Data.String as String
 
 {-
   Takes a list of strings and creates a multi line string where
@@ -12,7 +13,7 @@ import Data.Char as Char
 -}
 stringListToMultiline :: [String] -> String
 stringListToMultiline strings =
-    List.foldl (++) "" $ List.intersperse "\n" strings
+    String.unlines strings
 
 {-
   Adds 4*amount spaces in front of the specified string
@@ -23,7 +24,7 @@ indent amount original =
     let
         indentStr = List.replicate 4 '.'
     in
-        (List.foldl (++) "" $ List.replicate amount indentStr) ++ original
+        (List.concat $ List.replicate amount indentStr) ++ original
 
 
 
@@ -38,7 +39,7 @@ data Msg  = Msg {msgName :: String, msgParams :: [String]}
 -}
 msgToString :: Msg -> String
 msgToString Msg {msgName=name, msgParams=params} =
-    name ++ " " ++ (List.foldl (++) "" $ List.intersperse " " params)
+    name ++ " " ++ (List.intercalate " " params)
 
 
 {-
@@ -51,8 +52,7 @@ msgStringsFromMsgs msgs =
     [ "type Msg"
     ]
     ++ ( List.map (indent 1)
-            $ List.map (\(a, b) -> a ++ b)
-            $ List.zip (["= "] ++ (List.repeat "| "))
+            $ List.zipWith (++) (["= "] ++ (List.repeat "| "))
             $ List.map msgToString msgs
        )
 
@@ -80,7 +80,7 @@ buildCaseOption returnValue (Msg {msgName=name, msgParams=params}) =
 
 buildCaseOptions :: String -> [Msg] -> [String]
 buildCaseOptions returnValue msgs =
-    List.foldl (++) [] $ List.map (buildCaseOption returnValue) msgs
+    List.concatMap (buildCaseOption returnValue) msgs
 
 
 
@@ -128,7 +128,7 @@ moduleImportToString moduleImport =
         Name name ->
             "import " ++ name
         Exposing name exposed ->
-            "import " ++ name ++ (List.foldl (++) "" $ List.intersperse " " exposed)
+            "import " ++ name ++ (List.intercalate " " exposed)
         ExposingAll name ->
             "import " ++ name ++ " exposing (..)"
 
@@ -178,9 +178,9 @@ interCodeWhitespace blocks =
     in
         List.foldl (++) []
             $ List.map (\(a, b) -> a ++ b)
-            $ List.zip blocks 
-            $ List.repeat 
-            $ List.take whitespaceLines 
+            $ List.zip blocks
+            $ List.repeat
+            $ List.take whitespaceLines
             $ List.repeat ""
 
 
