@@ -81,12 +81,15 @@ recordInitFunction name (Record {recordName=recordName, recordMembers = members}
         typeSignature = name ++ " : " ++ recordName
         declaration = "name ="
     in
-        [ recordName
-          ++ " "
-          ++ ( List.concat
-                $ List.intersperse " "
-                $ List.map (\(_, _, defaultValue) -> defaultValue) members
-             )
+        [ typeSignature
+        , declaration
+        , indent 1 $
+            recordName
+                ++ " "
+                ++ ( List.concat
+                      $ List.intersperse " "
+                      $ List.map (\(_, _, defaultValue) -> defaultValue) members
+                   )
         ]
 
 
@@ -198,6 +201,24 @@ buildImportStatements modules =
         List.map moduleImportToString $ defaultModules ++ modules
 
 
+buildSubscriptionFunction :: [String]
+buildSubscriptionFunction =
+    ["subscriptions :: Model -> Sub Msg"]
+    ++ ["subscriptions _ ="]
+    ++ [indent 1 "Sub.none"]
+
+buildProgramFunction :: [String]
+buildProgramFunction =
+    [ "main : Program Never Model Msg"
+    , "main ="
+    , "    Html.program"
+    , "        { init = init"
+    , "        , update = update"
+    , "        , view = view"
+    , "        , subscriptions = subscriptions"
+    , "        }"
+    ]
+
 {-
   Adds a header comment to the specified code
 
@@ -222,7 +243,7 @@ addHeaderComment comment content =
 interCodeWhitespace :: [[String]] -> [String]
 interCodeWhitespace blocks =
     let
-        whitespaceLines = 3
+        whitespaceLines = 2
     in
         List.foldl (++) []
             $ List.map (\(a, b) -> a ++ b)
@@ -317,7 +338,7 @@ inputModel :: IO (Record)
 inputModel =
     do
         fields <- inner []
-        return $ Record "model" fields
+        return $ Record "Model" fields
     where
         inner :: [(String, String, String)] -> IO [(String, String, String)]
         inner acc =
@@ -337,10 +358,12 @@ someFunc =
     let
         fullCodeBuilder msgs model =
             [ buildImportStatements []
-            , addHeaderComment "Model" $ recordToStrings model
+            , addHeaderComment "Model" $ (recordToStrings model) ++ (recordInitFunction "init" model)
             , addHeaderComment "Messages" $ msgStringsFromMsgs msgs
             , addHeaderComment "Update" $ buildUpdateFunction msgs
             , addHeaderComment "View" $ buildViewFunction
+            , addHeaderComment "Subscriptions" $ buildSubscriptionFunction
+            , addHeaderComment "Program" $ buildProgramFunction
             ]
     in do
         msgs <- inputMsgs
